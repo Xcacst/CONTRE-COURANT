@@ -1,4 +1,5 @@
 #include "Obstacle.h"
+#include "GameConstants.h"
 #include <stdlib.h> 
 #include <math.h>
 
@@ -12,7 +13,7 @@ static const char* ObstacleTypeToSprite(ObstacleType type)
         return "./data/TestData/net.bmp";
     case TRASH_BOTTLE:
         return "./data/TestData/bottle.bmp";
-    case TRASH_CAN: // Asegúrate de tener este tipo en tu Enum
+    case TRASH_CAN: 
         return "./data/TestData/lata.bmp";
     default:
         return "./data/TestData/lata.bmp";
@@ -25,32 +26,36 @@ Obstacle::Obstacle(float startX, float startY, ObstacleType type)
     SetPosition(startX, startY);
     m_active = true;
 
-    // CONFIGURACIÓN DE DIFICULTAD [cite: 661]
+    // CONFIG
     switch (m_type)
     {
     case TRASH_PLASTIC_BAG:
-        SetScale(0.20f);
-        m_verticalSpeed = 30.0f; // El neumático es lento pero pesado
+        SetScale(GameConfig::OBSTACLE_SCALE_BAG);
+        m_verticalSpeed = GameConfig::OBSTACLE_SPEED_BAG; 
         break;
     case TRASH_NET:
-        SetScale(0.35f); // Hacemos la red más grande
-        m_verticalSpeed = 25.0f;
+        SetScale(GameConfig::OBSTACLE_SCALE_NET); 
+        m_verticalSpeed = GameConfig::OBSTACLE_SPEED_NET;
         break;
-    case TRASH_CAN: // LA LATA: Pequeña y muy veloz
-        SetScale(0.12f);
-        m_verticalSpeed = 120.0f; // ¡4 veces más rápida!
+    case TRASH_BOTTLE:
+        SetScale(GameConfig::OBSTACLE_SCALE_BOTTLE);
+        m_verticalSpeed = GameConfig::OBSTACLE_SPEED_BOTTLE;
+        break;
+    case TRASH_CAN: 
+        SetScale(GameConfig::OBSTACLE_SCALE_CAN);
+        m_verticalSpeed = GameConfig::OBSTACLE_SPEED_CAN; 
         break;
     default:
-        SetScale(0.15f);
-        m_verticalSpeed = 60.0f;
+        SetScale(GameConfig::OBSTACLE_SCALE_DEFAULT);
+        m_verticalSpeed = GameConfig::OBSTACLE_SPEED_DEFAULT;
         break;
     }
 }
 
-// SOLUCIÓN AL ERROR LNK2019: Definición del destructor 
+
 Obstacle::~Obstacle()
 {
-    // El cuerpo debe existir aunque esté vacío para que el Linker lo encuentre
+    
 }
 
 void Obstacle::Update(float dt)
@@ -58,19 +63,25 @@ void Obstacle::Update(float dt)
     if (!m_active) return;
     float dtSec = dt / 1000.0f;
 
-    // COMPORTAMIENTOS ÚNICOS PARA SUBIR DIFICULTAD
+    
     if (m_type == TRASH_NET) {
-        // Zig-Zag agresivo [cite: 692]
+
         static float zigTimer = 0.0f;
         zigTimer += dtSec;
         m_x += sinf(zigTimer * 5.0f) * 4.0f;
     }
+    else if (m_type == TRASH_BOTTLE) {
+        // Deriva lenta y suave de lado a lado (simula corriente)
+        static float driftTimer = 0.0f;
+        driftTimer += dtSec;
+        m_x += sinf(driftTimer * 1.5f) * 1.5f;
+    }
     else if (m_type == TRASH_CAN) {
-        // La lata cae "girando" (vibración rápida)
+        
         m_x += (float)((rand() % 5) - 2);
     }
 
-    // Movimiento vertical propio [cite: 686]
+   
     m_y += m_verticalSpeed * dtSec;
 
     GameObject::Update(dt);

@@ -22,7 +22,7 @@ public:
     ObstacleType GetType() const { return m_type; }
     bool IsActive() const { return m_active; }
     void Deactivate() { m_active = false; } // Para cuando sale de pantalla o choca
-
+    void Activate() { m_active = true; }
 private:
     ObstacleType m_type;
     float m_verticalSpeed; // Velocidad propia de hundimiento (o flotación)

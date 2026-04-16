@@ -3,11 +3,11 @@
 
 GameObject::GameObject(const char* spriteName, int cols, int rows)
 {
-    // Usamos la API de App para crear el sprite
+   
     m_sprite = App::CreateSprite(spriteName, cols, rows);
     m_x = 0.0f;
     m_y = 0.0f;
-    m_scale = 1.0f; // Escala por defecto
+    m_scale = 1.0f; 
 }
 
 GameObject::~GameObject()
@@ -24,7 +24,7 @@ void GameObject::Update(float dt)
     if (m_sprite)
     {
         m_sprite->SetPosition(m_x, m_y);
-        m_sprite->SetScale(m_scale); // Aplicar siempre la escala guardada
+        m_sprite->SetScale(m_scale); 
         m_sprite->Update(dt);
     }
 }

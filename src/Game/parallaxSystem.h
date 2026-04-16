@@ -9,6 +9,8 @@ struct ParallaxLayer {
     float speedMultiplier = 1.0f;
 };
 
+class Player;
+
 class ParallaxSystem {
 public:
     ParallaxSystem();
@@ -19,15 +21,16 @@ public:
     void Render();
     void Shutdown();
     void Reset();
+    void CheckCollisions(Player* player);
 
 private:
-    static const int NUM_LAYERS = 15;
+    static const int NUM_LAYERS = 20;
     ParallaxLayer m_layers[NUM_LAYERS];
 
     float m_spawnTimer;
     bool m_lastSideLeft;
 
-    void SpawnLayer(); // Esta es la función que te marcaba error
+    void SpawnLayer(float startY);
 };
 
 #endif

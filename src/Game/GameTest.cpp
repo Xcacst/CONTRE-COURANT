@@ -9,15 +9,18 @@
 #include <cstdio> // For sprintf
 #include <math.h>
 #include "../ContestAPI/app.h"
+#include "../ContestAPI/freeglut_config.h"
 #include <stdlib.h>
 #include <time.h>
 
+#include "Obstacle.h"          
+#include "CollectableAlly.h"   
 #include "Player.h"
-#include "Obstacle.h"
-#include "CollectableAlly.h" 
 #include "ParallaxSystem.h"
-#include <vector>
-#include <algorithm> // For std::remove_if
+#include "SpawnManager.h"      
+#include "GameConstants.h"
+#include "UIManager.h"
+#include "ParticleManager.h"
 
 // ---------------------------------------------------------------------------
 // GLOBALS
@@ -40,12 +43,12 @@ Player* g_player = nullptr;
 CSimpleSprite* boteEnemigo = nullptr;
 CSimpleSprite* fondoOceano = nullptr;
 ParallaxSystem* g_parallax = nullptr;
+SpawnManager* g_spawnManager = nullptr;
+UIManager* g_uiManager = nullptr;
+ParticleManager* g_particleManager = nullptr;
 
-std::vector<Obstacle*> g_obstacles;
-float g_obstacleSpawnTimer = 0.0f;
-
-std::vector<CollectableAlly*> g_allies;
-float g_allySpawnTimer = 0.0f;
+// MAIN MENU
+CSimpleSprite* menuSprite = nullptr;
 
 // ENVIRONMENT
 const int NUM_NUBES = 10;
@@ -54,25 +57,7 @@ float velocidadNubes[NUM_NUBES];
 float alturaOriginalNubes[NUM_NUBES];
 
 // GAME VARIABLES
-float g_profundidad = 400.0f;
-const float MAX_PROFUNDIDAD = 2300.0f;
-const float MIN_PROFUNDIDAD = 0.0f;
-
-// Helper: Simple AABB Collision
-bool IsColliding(GameObject* a, GameObject* b)
-{
-    float ax, ay, bx, by;
-    a->GetPosition(ax, ay);
-    b->GetPosition(bx, by);
-
-    float aw = a->GetWidth() * a->GetSprite()->GetScale();
-    float ah = a->GetHeight() * a->GetSprite()->GetScale();
-    float bw = b->GetWidth() * b->GetSprite()->GetScale();
-    float bh = b->GetHeight() * b->GetSprite()->GetScale();
-
-    return (abs(ax - bx) < (aw / 2.0f + bw / 2.0f - 10.0f)) &&
-        (abs(ay - by) < (ah / 2.0f + bh / 2.0f - 10.0f));
-}
+float g_profundidad = GameConfig::START_DEPTH;
 
 // ---------------------------------------------------------------------------
 // FUNCTIONS
@@ -81,23 +66,23 @@ bool IsColliding(GameObject* a, GameObject* b)
 void ResetGame()
 {
     //deter music al reiniciar
-    App::StopAudio("./data/audio/b.wav");
+    App::StopAudio("./data/audio/c.wav");
     App::StopAudio("./data/audio/a.wav");
+
     // Clean up entities
     if (g_player) { delete g_player; g_player = nullptr; }
-    for (auto obs : g_obstacles) delete obs;
-    g_obstacles.clear();
-    for (auto ally : g_allies) delete ally;
-    g_allies.clear();
+    if (g_spawnManager) { g_spawnManager->Reset(); }
 
     // Reset Variables
-    g_profundidad = 400.0f;
-    g_obstacleSpawnTimer = 0.0f;
-    g_allySpawnTimer = 0.0f;
+    g_profundidad = GameConfig::START_DEPTH;
     g_isDeepMusicPlaying = false;
 
     if (g_parallax) {
         g_parallax->Reset();
+    }
+
+    if (g_particleManager) {
+        g_particleManager->Reset();
     }
 
     g_player = new Player();
@@ -110,9 +95,15 @@ void Init()
     g_parallax = new ParallaxSystem();
     g_parallax->Init();
 
+    g_particleManager = new ParticleManager();
+    g_particleManager->Init();
+
+    g_spawnManager = new SpawnManager();
+    g_uiManager = new UIManager();
+
     // 1. BACKGROUND
     fondoOceano = App::CreateSprite("./data/TestData/Fondo.bmp", 1, 1);
-    fondoOceano->SetPosition(512.0f, -800.0f);
+    fondoOceano->SetPosition(GameConfig::SCREEN_CENTER_X, GameConfig::OCEAN_BG_START_Y);
     fondoOceano->SetScale(0.9f);
 
     // 2. PLAYER
@@ -120,7 +111,7 @@ void Init()
 
     // 3. BOAT
     boteEnemigo = App::CreateSprite("./data/TestData/BoteEnemigo.bmp", 1, 1);
-    boteEnemigo->SetPosition(512.0f, 300.0f);
+    boteEnemigo->SetPosition(GameConfig::SCREEN_CENTER_X, GameConfig::BOAT_DISPLAY_Y);
     boteEnemigo->SetScale(0.1f);
 
     // 4. CLOUDS
@@ -138,6 +129,14 @@ void Init()
         velocidadNubes[i] = 0.10f + ((float)(rand() % 50) / 100.0f);
     }
 
+    // 5. MENU SPRITE
+    menuSprite = App::CreateSprite("./data/TestData/MainMenu.bmp", 1, 1);
+    // Establecemos la posición en el centro de la pantalla (asumiendo 1024x768)
+    menuSprite->SetPosition(512.0f, 384.0f);
+    // IMPORTANTE: Modifica la escala de ser necesario dependiendo del tamaño original de tu imagen
+    // Prueba con 0.5f (mitad del tamaño), si sigue grande bájalo a 0.3f, si es muy chico súbelo a 0.7f
+    menuSprite->SetScale(0.5f); 
+
     g_currentState = MENU;
 }
 
@@ -147,7 +146,7 @@ void UpdateMenu(float dt)
     {
         ResetGame();
         g_currentState = PLAYING;
-        App::PlayAudio("./data/audio/b.wav", true);
+        App::PlayAudio("./data/audio/c.wav", true);
     }
 }
 
@@ -156,7 +155,7 @@ void UpdatePlaying(float dt)
     float dtSec = dt / 1000.0f;
 
     // --- PHYSICS: TUG OF WAR ---
-    float boatPullSpeed = 80.0f + (g_profundidad * 0.015f); // Pull gets harder deeper you go
+    float boatPullSpeed = GameConfig::BOAT_PULL_BASE_SPEED + (g_profundidad * GameConfig::BOAT_PULL_DEPTH_MULTIPLIER); 
     float playerSwimSpeed = 0.0f;
 
     if (g_player)
@@ -168,7 +167,15 @@ void UpdatePlaying(float dt)
 
         if (g_player->IsSwimmingDown())
         {
-            playerSwimSpeed = 200.0f + (g_player->GetMass() * 5.0f);
+            playerSwimSpeed = GameConfig::PLAYER_BASE_SWIM_SPEED + (g_player->GetMass() * GameConfig::PLAYER_MASS_SWIM_MULTIPLIER);
+            
+            // Spawn hydro-dynamic trail bubbles randomly while swimming down
+            if (g_particleManager && (rand() % 100 < 30))
+            {
+                float px, py;
+                g_player->GetPosition(px, py);
+                g_particleManager->SpawnTrailBubble(px, py);
+            }
         }
     }
 
@@ -177,136 +184,69 @@ void UpdatePlaying(float dt)
     g_profundidad += netForce * dtSec;
 
     //musicchange
-    const float DEEP_MUSIC_THRESHOLD = 1200.0f;
-    if (g_profundidad > DEEP_MUSIC_THRESHOLD && !g_isDeepMusicPlaying)
+    if (g_profundidad > GameConfig::MUSIC_CHANGE_DEPTH && !g_isDeepMusicPlaying)
     {
         g_isDeepMusicPlaying = true;
-        App::StopAudio("./data/audio/b.wav");
+        App::StopAudio("./data/audio/c.wav");
         App::PlayAudio("./data/audio/a.wav", true);
     }
-    else if (g_profundidad <= DEEP_MUSIC_THRESHOLD && g_isDeepMusicPlaying)
+    else if (g_profundidad <= GameConfig::MUSIC_CHANGE_DEPTH && g_isDeepMusicPlaying)
     {
         g_isDeepMusicPlaying = false;
         App::StopAudio("./data/audio/a.wav");
-        App::PlayAudio("./data/audio/b.wav", true);
+        App::PlayAudio("./data/audio/c.wav", true);
     }
 
     // --- WIN / LOSE CONDITIONS ---
-    if (g_profundidad <= MIN_PROFUNDIDAD)
+    if (g_profundidad <= GameConfig::LOSE_DEPTH)
     {
-        g_profundidad = MIN_PROFUNDIDAD;
+        g_profundidad = GameConfig::LOSE_DEPTH;
         g_currentState = LOST;
-        App::StopAudio("./data/audio/b.wav");
+        App::StopAudio("./data/audio/c.wav");
         App::StopAudio("./data/audio/a.wav");
     }
-    if (g_profundidad >= MAX_PROFUNDIDAD)
+    if (g_profundidad >= GameConfig::WIN_DEPTH)
     {
-        g_profundidad = MAX_PROFUNDIDAD;
+        g_profundidad = GameConfig::WIN_DEPTH;
         g_currentState = WON;
-        App::StopAudio("./data/audio/b.wav");
+        App::StopAudio("./data/audio/c.wav");
         App::StopAudio("./data/audio/a.wav");
     }
 
-    // --- MANAGERS ---
-
-    // Obstacles
-    g_obstacleSpawnTimer += dtSec;
-    if (g_obstacleSpawnTimer > 2.0f)
+    if (g_spawnManager)
     {
-        g_obstacleSpawnTimer = 0.0f;
-        float spawnX = (float)(rand() % 900 + 50);
-        float spawnY = -200.0f;
-
-        // CAMBIO INTEGRADO: Elegir entre 3 tipos para que aparezca la lata
-        int r = rand() % 3;
-        ObstacleType type;
-        if (r == 0) type = TRASH_PLASTIC_BAG;
-        else if (r == 1) type = TRASH_NET;
-        else type = TRASH_CAN;
-
-        g_obstacles.push_back(new Obstacle(spawnX, spawnY, type));
+        g_spawnManager->Update(dt, netForce, g_profundidad);
+        g_spawnManager->CheckCollisions(g_player);
     }
 
-    // Obstacle Logic
-    for (size_t i = 0; i < g_obstacles.size(); i++)
+    if (g_parallax)
     {
-        Obstacle* obs = g_obstacles[i];
-        if (!obs->IsActive()) continue;
-
-        float relativeSpeed = netForce;
-        float ox, oy;
-        obs->GetPosition(ox, oy);
-        oy += relativeSpeed * dtSec;
-        oy += 30.0f * dtSec;
-
-        obs->SetPosition(ox, oy);
-        obs->Update(dt);
-
-        if (g_player && IsColliding(g_player, obs))
-        {
-            obs->Deactivate();
-            // L�gica de penalizaci�n actualizada
-            if (obs->GetType() == TRASH_PLASTIC_BAG) g_player->ReduceStamina(20.0f);
-            else if (obs->GetType() == TRASH_NET) g_player->ReduceStamina(10.0f);
-            else if (obs->GetType() == TRASH_CAN) g_player->ReduceStamina(30.0f); // Penalizaci�n mayor para la lata
-        }
-
-        if (oy > 1000.0f || oy < -500.0f) obs->Deactivate();
+        g_parallax->CheckCollisions(g_player);
     }
 
-    // Clean Obstacles
-    g_obstacles.erase(std::remove_if(g_obstacles.begin(), g_obstacles.end(),
-        [](Obstacle* obs) { if (!obs->IsActive()) { delete obs; return true; } return false; }), g_obstacles.end());
-
-    // Allies
-    g_allySpawnTimer += dtSec;
-    if (g_allySpawnTimer > 3.0f)
+    if (g_uiManager)
     {
-        g_allySpawnTimer = 0.0f;
-        float spawnX = (float)(rand() % 900 + 50);
-        float spawnY = -200.0f;
-        g_allies.push_back(new CollectableAlly(spawnX, spawnY, "./data/TestData/PEZ_DER.bmp", "./data/TestData/PEZ_IZQ.bmp"));
+        g_uiManager->SetHighScore(g_profundidad);
+        g_uiManager->Update(dt);
     }
 
-    // Ally Logic
-    for (auto it = g_allies.begin(); it != g_allies.end(); )
-    {
-        CollectableAlly* ally = *it;
-        float relativeSpeed = netForce;
-        float ax, ay;
-        ally->GetPosition(ax, ay);
-        ay += relativeSpeed * dtSec;
-        ally->SetPosition(ax, ay);
-        ally->Update(dt);
-
-        if (g_player && IsColliding(g_player, ally))
-        {
-            g_player->AddAllyMass(ally->GetMassValue());
-            g_player->RecoverStamina(10.0f);
-            g_player->AddAllyToSwarm(ally);
-            it = g_allies.erase(it);
-        }
-        else if (ay > 1000.0f || ay < -500.0f)
-        {
-            delete ally;
-            it = g_allies.erase(it);
-        }
-        else ++it;
-    }
     if (g_parallax)
     {
         g_parallax->Update(netForce, dt);
     }
 
-    
+    if (g_particleManager)
+    {
+        g_particleManager->Update(dt, netForce);
+    }
 
     // --- VISUALS ---
-    fondoOceano->SetPosition(512.0f, -800.0f + g_profundidad);
+    fondoOceano->SetPosition(GameConfig::SCREEN_CENTER_X, GameConfig::OCEAN_BG_START_Y + g_profundidad);
 
     static float waveTime = 0.0f;
     waveTime += dtSec;
-    float boatY = 300.0f + sinf(waveTime * 2.0f) * 10.0f + g_profundidad;
-    boteEnemigo->SetPosition(512.0f, boatY);
+    float boatY = GameConfig::BOAT_DISPLAY_Y + sinf(waveTime * 2.0f) * 10.0f + g_profundidad;
+    boteEnemigo->SetPosition(GameConfig::SCREEN_CENTER_X, boatY);
 
     for (int i = 0; i < NUM_NUBES; i++)
     {
@@ -326,7 +266,7 @@ void UpdateGameOver(float dt)
     {
         ResetGame();
         g_currentState = PLAYING;
-        App::PlayAudio("./data/audio/b.wav", true);
+        App::PlayAudio("./data/audio/c.wav", true);
     }
 }
 
@@ -346,21 +286,44 @@ void Update(const float deltaTime)
 // ---------------------------------------------------------------------------
 void Render()
 {
-    
+    // === 1. PREPARAR EL SCREEN SHAKE (MANIPULACIÓN DE MATRIZ) ===
+    float shakeX = 0.0f;
+    float shakeY = 0.0f;
+
+    if (g_currentState == PLAYING && g_player)
+    {
+        float tensionFactor = 1.0f - (g_player->GetStamina() / 100.0f);
+        if (tensionFactor > 0.9f)
+        {
+            // Calculamos un desplazamiento tenue en Coordenadas de Dispositivo Normalizadas (NDC)
+            shakeX = (((rand() % 100) / 100.0f) * 0.02f) - 0.01f;
+            shakeY = (((rand() % 100) / 100.0f) * 0.02f) - 0.01f;
+        }
+    }
+
+    // Agitamos la cámara entera
+    glPushMatrix();
+    glTranslatef(shakeX, shakeY, 0.0f);
+
+    // === 2. DIBUJAR ELEMENTOS DEL JUEGO ===
     fondoOceano->Draw();
-  if (g_parallax)
+
+    if (g_parallax)
     {
         g_parallax->Render();
     }
 
-    for (int i = 0; i < NUM_NUBES; i++) nubes[i]->Draw();
+    // Burbujas: encima del parallax, detrás de todos los sprites
+    if (g_particleManager)
+    {
+        g_particleManager->Draw();
+    }
 
+    for (int i = 0; i < NUM_NUBES; i++) nubes[i]->Draw();
 
     if (g_currentState == PLAYING)
     {
-      
-        for (auto obs : g_obstacles) if (obs->IsActive()) obs->Draw();
-        for (auto ally : g_allies) ally->Draw();
+        if (g_spawnManager) g_spawnManager->Draw();
 
         boteEnemigo->Draw();
 
@@ -371,40 +334,43 @@ void Render()
             boteEnemigo->GetPosition(bx, by);
 
             float tensionFactor = 1.0f - (g_player->GetStamina() / 100.0f);
-            float shake = (tensionFactor > 0.9f) ? (rand() % 5 - 2.5f) : 1.0f;
+            
             App::DrawLine(px + 10.0f, py + 10.0f, bx, by, tensionFactor, 1.0f - tensionFactor, 0.0f);
 
+            if (g_uiManager) 
+            {
+                g_uiManager->RenderVignette(g_player, g_profundidad);
+                g_uiManager->RenderFlash();
+            }
+
             g_player->Draw();
+        }
+    }
 
-            // --- HUD ---
-            char buffer[64];
-            sprintf(buffer, "DEPTH: %.1f m / %.1f m", g_profundidad / 10.0f, MAX_PROFUNDIDAD / 10.0f);
-            App::Print(20, 740, buffer, 1.0f, 1.0f, 1.0f);
+    // === 3. RESTAURAR LA MATRIZ DE LA CÁMARA ===
+    glPopMatrix();
 
-            sprintf(buffer, "STAMINA: %.0f%%", g_player->GetStamina());
-            App::Print(20, 720, buffer, tensionFactor, 1.0f - tensionFactor, 0.0f);
-
-            sprintf(buffer, "MASS: %.1f kg", g_player->GetMass());
-            App::Print(20, 700, buffer, 0.5f, 0.5f, 1.0f);
+    // === 4. DIBUJAR UI / HUD (NO DEBEN TEMBLAR) ===
+    if (g_currentState == PLAYING && g_player)
+    {
+        if (g_uiManager) 
+        {
+            g_uiManager->RenderHUD(g_player, g_profundidad, GameConfig::WIN_DEPTH);
+            g_uiManager->RenderDepthBar(g_profundidad, GameConfig::WIN_DEPTH);
         }
     }
     else if (g_currentState == MENU)
     {
-        App::Print(300, 400, "CONTRE-COURANT", 1.0f, 1.0f, 0.0f, GLUT_BITMAP_TIMES_ROMAN_24);
-        App::Print(320, 350, "Press SPACE to Start", 1.0f, 1.0f, 1.0f);
-        App::Print(320, 320, "Arrows to Swim, DOWN to Dive", 0.8f, 0.8f, 0.8f);
+        if (menuSprite) menuSprite->Draw();
+        if (g_uiManager) g_uiManager->RenderMenu();
     }
     else if (g_currentState == WON)
     {
-        App::Print(350, 400, "VICTORY!", 0.0f, 1.0f, 0.0f, GLUT_BITMAP_TIMES_ROMAN_24);
-        App::Print(300, 350, "The boat has been sunk!", 1.0f, 1.0f, 1.0f);
-        App::Print(320, 300, "Press R to Restart", 0.8f, 0.8f, 0.8f);
+        if (g_uiManager) g_uiManager->RenderWon();
     }
     else if (g_currentState == LOST)
     {
-        App::Print(350, 400, "GAME OVER", 1.0f, 0.0f, 0.0f, GLUT_BITMAP_TIMES_ROMAN_24);
-        App::Print(300, 350, "You were caught!", 1.0f, 1.0f, 1.0f);
-        App::Print(320, 300, "Press R to Restart", 0.8f, 0.8f, 0.8f);
+        if (g_uiManager) g_uiManager->RenderLost();
     }
 }
 
@@ -413,15 +379,14 @@ void Render()
 // ---------------------------------------------------------------------------
 void Shutdown()
 {
-    if (g_parallax) {
-        delete g_parallax; g_parallax = nullptr;
-    }
+    if (g_parallax) { delete g_parallax; g_parallax = nullptr; }
+    if (g_particleManager) { delete g_particleManager; g_particleManager = nullptr; }
     if (boteEnemigo) delete boteEnemigo;
     if (fondoOceano) delete fondoOceano;
     if (g_player) delete g_player;
-
+    if (g_spawnManager) { delete g_spawnManager; g_spawnManager = nullptr; }
+    if (g_uiManager) { delete g_uiManager; g_uiManager = nullptr; }
+    if (menuSprite) { delete menuSprite; menuSprite = nullptr; }
 
     for (int i = 0; i < NUM_NUBES; i++) if (nubes[i]) delete nubes[i];
-    for (auto obs : g_obstacles) delete obs;
-    for (auto ally : g_allies) delete ally;
 }

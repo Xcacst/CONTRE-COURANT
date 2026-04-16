@@ -26,7 +26,9 @@ public:
     void RecoverStamina(float amount);
 
     // Para gestionar el enjambre
-    void AddAllyToSwarm(CollectableAlly* ally);
+    bool AddAllyToSwarm(CollectableAlly* ally);  // Retorna false si el swarm está lleno
+    bool SacrificeAlly();                        // Sacrifica un aliado para absorber daño
+    int  GetSwarmSize() const { return (int)m_swarm.size(); }
 
 private:
     CSimpleSprite* m_spriteRight;
