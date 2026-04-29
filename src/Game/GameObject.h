@@ -18,14 +18,14 @@ public:
     float GetWidth();
     float GetHeight();
 
-    // Acceso directo al sprite si es necesario para animaciones avanzadas
+ 
     CSimpleSprite* GetSprite() { return m_sprite; }
 
 protected:
     CSimpleSprite* m_sprite;
     float m_x;
     float m_y;
-    float m_scale; // Stores current scale
+    float m_scale; 
 };
 
 #endif

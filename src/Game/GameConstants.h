@@ -8,9 +8,22 @@ namespace GameConfig {
     constexpr float GAME_MIN_X = 50.0f;
     constexpr float GAME_MAX_X = 974.0f;
     constexpr float DESPAWN_Y_TOP = 650.0f;   
+    constexpr float GAME_DESPAWN_Y = 650.0f; // Alias for DESPAWN_Y_TOP x algas
 
     constexpr float DESPAWN_Y_BOTTOM = -500.0f;
     constexpr float SPAWN_START_Y = -200.0f;
+
+    // --- ALGAS ---
+    constexpr int ALGAE_COST_TO_CALL = 3;
+    constexpr float ALGAE_SPAWN_RATE_START = 2.0f; 
+
+    // --- BOIDS (SWARM BACKGROUND) ---
+    constexpr float BOIDS_COHESION_WEIGHT = 0.5f;
+    constexpr float BOIDS_ALIGNMENT_WEIGHT = 1.0f;
+    constexpr float BOIDS_SEPARATION_WEIGHT = 1.7f;
+    constexpr float BOIDS_NEIGHBOR_RADIUS = 150.0f;
+    constexpr float BOIDS_SEPARATION_RADIUS = 40.0f;
+    constexpr float BOIDS_MAX_SPEED = 120.0f;
 
     //
     constexpr float START_DEPTH = 400.0f;

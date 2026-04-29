@@ -4,6 +4,8 @@
 #include "Player.h"
 #include "GameConstants.h"
 #include "UIManager.h"
+#include "Algae.h"
+#include "../ContestAPI/app.h"
 #include <stdlib.h>
 #include <cstdio>
 #include <math.h>
@@ -41,6 +43,14 @@ SpawnManager::SpawnManager()
         CollectableAlly* a = new CollectableAlly(0, 0, "./data/TestData/PEZ_DER.bmp", "./data/TestData/PEZ_IZQ.bmp");
         m_allyPool.push_back(a);
     }
+    
+    m_algaeSpawnTimer = 0.0f;
+    m_spaceWasPressed = false;
+    for (int i = 0; i < 20; ++i) {
+        class Algae* a = new class Algae(0, 0); // Usaremos #include "Algae.h"
+        a->SetActive(false);
+        m_algaePool.push_back(a);
+    }
 }
 
 SpawnManager::~SpawnManager()
@@ -54,6 +64,11 @@ SpawnManager::~SpawnManager()
     for (auto ally : m_allyPool) delete ally;
     m_activeAllies.clear();
     m_allyPool.clear();
+    
+    for (auto algae : m_activeAlgae) delete algae;
+    for (auto algae : m_algaePool) delete algae;
+    m_activeAlgae.clear();
+    m_algaePool.clear();
 }
 
 void SpawnManager::Reset()
@@ -206,11 +221,112 @@ void SpawnManager::Update(float dt, float netForce, float currentDepth)
         }
         else ++it;
     }
+
+    // Aplicar Boids a todos los aliados activos
+    for (auto ally : m_activeAllies)
+    {
+        ally->ApplyBoids(m_activeAllies);
+    }
+
+    // --- ALGAE SPAWN & UPDATE ---
+    m_algaeSpawnTimer += dtSec;
+    if (m_algaeSpawnTimer > GameConfig::ALGAE_SPAWN_RATE_START)
+    {
+        m_algaeSpawnTimer = 0.0f;
+        float ax = GameConfig::GAME_MIN_X + (float)(rand() % (int)(GameConfig::GAME_MAX_X - GameConfig::GAME_MIN_X));
+        Algae* a = nullptr;
+        if (!m_algaePool.empty()) {
+            a = m_algaePool.back();
+            m_algaePool.pop_back();
+        } else {
+            a = new Algae(0, 0);
+        }
+        // DESPAWN_Y_TOP (650) + 50 = 700 (abajo de la pantalla visible), para que suba flotando.
+        a->Spawn(ax, GameConfig::DESPAWN_Y_TOP + 50.0f); 
+        m_activeAlgae.push_back(a);
+    }
+
+    for (auto it = m_activeAlgae.begin(); it != m_activeAlgae.end();)
+    {
+        (*it)->Update(dt);
+        if (!(*it)->IsActive())
+        {
+            m_algaePool.push_back(*it);
+            it = m_activeAlgae.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
 }
 
 void SpawnManager::CheckCollisions(Player* player)
 {
     if (!player) return;
+
+    for (auto it = m_activeAlgae.begin(); it != m_activeAlgae.end(); )
+    {
+        Algae* a = *it;
+        if (IsCollidingObj(player, a))
+        {
+            player->AddAlgae(1);
+            a->SetActive(false);
+            
+            float px, py;
+            player->GetPosition(px, py);
+            if (g_uiManager) g_uiManager->AddPopup(px, py + 30.0f, "+1 ALGAE", 0.0f, 1.0f, 0.0f);
+            
+            m_algaePool.push_back(a);
+            it = m_activeAlgae.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
+    bool spacePressed = App::IsKeyPressed(App::KEY_SPACE);
+    if (spacePressed && !m_spaceWasPressed)
+    {
+        if (player->GetAlgaeCount() >= GameConfig::ALGAE_COST_TO_CALL)
+        {
+            int alliesCalled = 0;
+            float px, py;
+            player->GetPosition(px, py);
+
+            for (auto it = m_activeAllies.begin(); it != m_activeAllies.end(); )
+            {
+                if ((*it)->GetState() == AllyState::PASSING)
+                {
+                    bool added = player->AddAllyToSwarm(*it);
+                    if (added)
+                    {
+                        player->AddAllyMass((*it)->GetMassValue());
+                        alliesCalled++;
+                        it = m_activeAllies.erase(it);
+                        if (alliesCalled >= 2) break;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                else
+                {
+                    ++it;
+                }
+            }
+
+            if (alliesCalled > 0)
+            {
+                player->ReduceAlgae(GameConfig::ALGAE_COST_TO_CALL);
+                if (g_uiManager) g_uiManager->AddPopup(px, py + 45.0f, "ALLIES CALLED", 0.0f, 0.8f, 1.0f);
+            }
+        }
+    }
+    m_spaceWasPressed = spacePressed;
+
 
     // Obstacles collision
     for (size_t i = 0; i < m_activeObstacles.size(); i++)
@@ -234,31 +350,29 @@ void SpawnManager::CheckCollisions(Player* player)
 
             if (allyAbsorbed)
             {
-                // El aliado sacrificado absorbe todo el daño
-                if (g_uiManager) g_uiManager->AddPopup(px, py + 30.0f, "ALIADO PERDIDO!", 1.0f, 0.6f, 0.0f);
+                if (g_uiManager) g_uiManager->AddPopup(px, py + 30.0f, "ALLY LOST!", 1.0f, 0.6f, 0.0f);
             }
             else
             {
-                // Sin aliados: daño directo a la stamina según tipo de basura
                 char dmgText[32];
                 if (obs->GetType() == TRASH_PLASTIC_BAG) {
                     player->ReduceStamina(GameConfig::PENALTY_PLASTIC_BAG);
-                    sprintf(dmgText, "-%.0f OXIGENO", GameConfig::PENALTY_PLASTIC_BAG);
+                    sprintf(dmgText, "-%.0f STAMINA", GameConfig::PENALTY_PLASTIC_BAG);
                     if (g_uiManager) g_uiManager->AddPopup(px, py + 30.0f, dmgText, 1.0f, 0.3f, 0.3f);
                 }
                 else if (obs->GetType() == TRASH_NET) {
                     player->ReduceStamina(GameConfig::PENALTY_NET);
-                    sprintf(dmgText, "-%.0f OXIGENO", GameConfig::PENALTY_NET);
+                    sprintf(dmgText, "-%.0f STAMINA", GameConfig::PENALTY_NET);
                     if (g_uiManager) g_uiManager->AddPopup(px, py + 30.0f, dmgText, 1.0f, 0.5f, 0.5f);
                 }
                 else if (obs->GetType() == TRASH_CAN) {
                     player->ReduceStamina(GameConfig::PENALTY_CAN);
-                    sprintf(dmgText, "-%.0f OXIGENO !!", GameConfig::PENALTY_CAN);
+                    sprintf(dmgText, "-%.0f STAMINA !!", GameConfig::PENALTY_CAN);
                     if (g_uiManager) g_uiManager->AddPopup(px, py + 30.0f, dmgText, 1.0f, 0.0f, 0.0f);
                 }
                 else if (obs->GetType() == TRASH_BOTTLE) {
                     player->ReduceStamina(GameConfig::PENALTY_BOTTLE);
-                    sprintf(dmgText, "-%.0f OXIGENO", GameConfig::PENALTY_BOTTLE);
+                    sprintf(dmgText, "-%.0f STAMINA", GameConfig::PENALTY_BOTTLE);
                     if (g_uiManager) g_uiManager->AddPopup(px, py + 30.0f, dmgText, 1.0f, 0.4f, 0.0f);
                 }
             }
@@ -283,13 +397,12 @@ void SpawnManager::CheckCollisions(Player* player)
                 it = m_activeAllies.erase(it);
 
                 char recText[32];
-                sprintf(recText, "+%.0f OXIGENO", GameConfig::ALLY_STAMINA_HEAL);
+                sprintf(recText, "+%.0f STAMINA", GameConfig::ALLY_STAMINA_HEAL);
                 if (g_uiManager) g_uiManager->AddPopup(px, py + 30.0f, recText, 0.3f, 1.0f, 0.3f);
             }
             else
             {
-                // Swarm lleno: mostrar mensaje y dejar pasar al aliado
-                if (g_uiManager) g_uiManager->AddPopup(px, py + 30.0f, "ENJAMBRE LLENO!", 1.0f, 0.8f, 0.0f);
+                if (g_uiManager) g_uiManager->AddPopup(px, py + 30.0f, "SWARM FULL!", 1.0f, 0.8f, 0.0f);
                 ++it;
             }
         }
@@ -302,6 +415,11 @@ void SpawnManager::CheckCollisions(Player* player)
 
 void SpawnManager::Draw()
 {
+    for (auto algae : m_activeAlgae)
+    {
+        if (algae->IsActive()) algae->Draw();
+    }
+
     for (auto obs : m_activeObstacles)
     {
         if (obs->IsActive()) obs->Draw();

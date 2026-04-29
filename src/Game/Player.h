@@ -2,9 +2,9 @@
 #define _PLAYER_H
 
 #include "GameObject.h"
-#include <vector> // Required for std::vector
+#include <vector> 
 
-class CollectableAlly; // Forward declaration to avoid circular include
+class CollectableAlly; 
 
 class Player : public GameObject
 {
@@ -13,20 +13,24 @@ public:
     virtual ~Player();
 
     virtual void Update(float dt) override;
-    virtual void Draw() override; // Override Draw to draw swarm
+    virtual void Draw() override; 
 
-    // Métodos de Gameplay
+    // Méthod Gameplay
     bool IsSwimmingDown() const;
     float GetMass() const { return m_mass; }
     float GetStamina() const { return m_stamina; }
     
-    // Gestión de estado
+    // Gestión state allys
     void AddAllyMass(float amount);
     void ReduceStamina(float amount);
     void RecoverStamina(float amount);
+    
+    int GetAlgaeCount() const { return m_algaeCount; }
+    void AddAlgae(int amount);
+    void ReduceAlgae(int amount);
 
-    // Para gestionar el enjambre
-    bool AddAllyToSwarm(CollectableAlly* ally);  // Retorna false si el swarm está lleno
+    // gestion allys
+    bool AddAllyToSwarm(CollectableAlly* ally);  
     bool SacrificeAlly();                        // Sacrifica un aliado para absorber daño
     int  GetSwarmSize() const { return (int)m_swarm.size(); }
 
@@ -37,16 +41,17 @@ private:
 
     float m_mass;
     float m_stamina;
+    int m_algaeCount;
     float m_speedX;
     
     // Estado de input
     bool m_isSwimmingDown;
 
-    std::vector<CollectableAlly*> m_swarm; // El enjambre de aliados que siguen al jugador
+    std::vector<CollectableAlly*> m_swarm; 
 
     // --- VARIABLES PARA EL ENJAMBRE ---
-    float m_swarmRotationAngle; // Guarda el ángulo de rotación actual del enjambre
-    float m_swarmTime;          // Un contador de tiempo para el efecto de pulsación
+    float m_swarmRotationAngle; 
+    float m_swarmTime;          // pulse effect
 };
 
 #endif

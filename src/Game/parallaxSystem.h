@@ -14,7 +14,7 @@ class Player;
 class ParallaxSystem {
 public:
     ParallaxSystem();
-    ~ParallaxSystem(); // El destructor debe estar declarado aquí
+    ~ParallaxSystem(); 
 
     void Init();
     void Update(float netForce, float dt);

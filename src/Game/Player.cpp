@@ -16,6 +16,7 @@ Player::Player() : GameObject("./data/TestData/PEZ_DER.bmp", 1, 1)
 
     m_mass = GameConfig::PLAYER_START_MASS;
     m_stamina = GameConfig::PLAYER_START_STAMINA;
+    m_algaeCount = 0;
     m_speedX = GameConfig::PLAYER_SPEED_X;
 
 
@@ -171,6 +172,17 @@ void Player::RecoverStamina(float amount)
 {
     m_stamina += amount;
     if (m_stamina > GameConfig::PLAYER_START_STAMINA) m_stamina = GameConfig::PLAYER_START_STAMINA;
+}
+
+void Player::AddAlgae(int amount)
+{
+    m_algaeCount += amount;
+}
+
+void Player::ReduceAlgae(int amount)
+{
+    m_algaeCount -= amount;
+    if (m_algaeCount < 0) m_algaeCount = 0;
 }
 
 bool Player::AddAllyToSwarm(CollectableAlly* ally)

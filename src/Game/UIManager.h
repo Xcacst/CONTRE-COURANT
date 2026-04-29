@@ -11,8 +11,8 @@ struct FloatingText {
     float y;
     std::string text;
     float r, g, b;
-    float lifeTime;     // Tiempo de vida restante
-    float maxLifeTime;  // Utilizado para efecto de desvanecimiento
+    float lifeTime;     
+    float maxLifeTime;  
 };
 
 class UIManager
@@ -59,6 +59,8 @@ private:
 
     // Flash de colisión
     float m_flashTimer;     // Tiempo restante del flash
+    
+    class CSimpleSprite* m_finSprite;
 };
 
 #endif

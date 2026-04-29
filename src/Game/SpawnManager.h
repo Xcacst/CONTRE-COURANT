@@ -27,6 +27,11 @@ private:
     std::vector<CollectableAlly*> m_activeAllies;
     std::vector<CollectableAlly*> m_allyPool;
     float m_allySpawnTimer;
+    
+    std::vector<class Algae*> m_activeAlgae;
+    std::vector<class Algae*> m_algaePool;
+    float m_algaeSpawnTimer;
+    bool m_spaceWasPressed;
 };
 
 #endif

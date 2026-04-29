@@ -4,14 +4,14 @@
 namespace GameConfig
 {
     constexpr int   BUBBLE_MAX_COUNT    = 150;
-    constexpr float BUBBLE_BASE_SPEED   = 60.0f;   // px/s subiendo
-    constexpr float BUBBLE_FORCE_SCALE  = 0.8f;    // cuánto amplifica el netForce
+    constexpr float BUBBLE_BASE_SPEED   = 60.0f;   
+    constexpr float BUBBLE_FORCE_SCALE  = 0.8f;    
     constexpr float BUBBLE_ALPHA_MIN    = 0.08f;
     constexpr float BUBBLE_ALPHA_MAX    = 0.35f;
     constexpr float BUBBLE_SIZE_MIN     = 2.0f;
     constexpr float BUBBLE_SIZE_MAX     = 5.0f;
-    constexpr float BUBBLE_ZIGZAG_AMP   = 18.0f;   // amplitud del seno lateral
-    constexpr float BUBBLE_ZIGZAG_FREQ  = 1.8f;    // frecuencia del seno
+    constexpr float BUBBLE_ZIGZAG_AMP   = 18.0f;   
+    constexpr float BUBBLE_ZIGZAG_FREQ  = 1.8f;    
 }
 
 // ---------------------------------------------------------------------------
@@ -21,15 +21,15 @@ struct Bubble
 {
     float x;
     float y;
-    float speedY;     // velocidad base de subida (px/s)
-    float size;       // tamaño del quad en píxeles
+    float speedY;     // spepdYvertical
+    float size;       // sizepixelbubles
     float alpha;      // transparencia [0..1]
     float phase;      // desfase para el zigzag senoidal
     bool  active;
 };
 
 // ---------------------------------------------------------------------------
-// ParticleManager — pool estático de burbujas
+// ParticleManager — pool static bubles
 // ---------------------------------------------------------------------------
 class ParticleManager
 {
